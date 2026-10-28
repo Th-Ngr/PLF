@@ -2,7 +2,7 @@ import { openDatabase, getAllShifts, putShift, putManyShifts, deleteShift, repla
 import { generateWeeklyShifts, generateCycleShifts, detectConflicts, overlaps, isActive } from "./core/schedule.js";
 import { addHours, dateAtTime, formatDate, formatTime, toLocalDateInput, toLocalMonthInput, isSameMonth } from "./core/date-time.js";
 import { toCents, formatMoney, sum } from "./core/money.js";
-import { expectedPaymentDate } from "./src/core/payment-rules.js";
+import { expectedPaymentDate } from "./core/payment-rules.js";
 import { buildIcs, buildCsv, csvMoney, download } from "./core/exports.js";
 
 const $ = selector => document.querySelector(selector);

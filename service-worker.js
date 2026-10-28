@@ -1,13 +1,10 @@
-const CACHE_NAME = "plantao-facil-v0.1.0";
+const CACHE_NAME = "plantao-facil-v0.2.0";
 const APP_FILES = [
-  "./",
-  "./index.html",
-  "./manifest.webmanifest",
-  "./src/styles/main.css",
-  "./src/app.js",
-  "./src/core/date-time.js",
-  "./src/core/money.js",
-  "./src/core/schedule.js",
+  "./", "./index.html", "./manifest.webmanifest",
+  "./icons/icon-192.png", "./icons/icon-512.png",
+  "./src/styles/main.css", "./src/app.js",
+  "./src/core/date-time.js", "./src/core/money.js", "./src/core/schedule.js",
+  "./src/core/payment-rules.js", "./src/core/exports.js",
   "./src/infrastructure/storage/database.js"
 ];
 
@@ -17,21 +14,20 @@ self.addEventListener("install", event => {
 });
 
 self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))))
-  );
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))));
   self.clients.claim();
 });
 
+// Rede primeiro (você sempre vê a versão mais recente); cache como reserva offline.
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+    fetch(event.request).then(response => {
       if (response.ok && new URL(event.request.url).origin === self.location.origin) {
         const copy = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
       }
       return response;
-    }).catch(() => caches.match("./index.html")))
+    }).catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
   );
 });

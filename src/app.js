@@ -1,11 +1,13 @@
 import { openDatabase, getAllShifts, putShift, putManyShifts, deleteShift, replaceAllShifts } from "./infrastructure/storage/database.js";
-import { generateWeeklyShifts, generateCycleShifts, detectConflicts, buildShift } from "./core/schedule.js";
+import { generateWeeklyShifts, generateCycleShifts, detectConflicts, overlaps, isActive } from "./core/schedule.js";
 import { addHours, dateAtTime, formatDate, formatTime, toLocalDateInput, toLocalMonthInput, isSameMonth } from "./core/date-time.js";
 import { toCents, formatMoney, sum } from "./core/money.js";
+import { expectedPaymentDate } from "./core/payment-rules.js";
+import { buildIcs, buildCsv, csvMoney, download } from "./core/exports.js";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.2.0";
 let db;
 let shifts = [];
 let generationPreview = [];
@@ -13,7 +15,7 @@ let previewConflicts = [];
 let scheduleMode = "weekly";
 let toastTimer;
 
-const today = toLocalDateInput(new Date());
+let today = toLocalDateInput(new Date());
 const month = toLocalMonthInput(new Date());
 $("#periodStart").value = today;
 $("#periodEnd").value = `${month}-${String(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
@@ -41,6 +43,7 @@ function isPayable(shift) { return shift.status === "completed" || (shift.status
 function remainingCents(shift) { return Math.max(0, shift.valueCents - getPaidCents(shift)); }
 function sortShifts(list) { return [...list].sort((a, b) => a.startAt.localeCompare(b.startAt)); }
 async function refreshData() {
+  today = toLocalDateInput(new Date());
   shifts = sortShifts(await getAllShifts(db));
   renderAll();
 }
@@ -60,54 +63,70 @@ function formatShiftRange(shift) {
 function shiftInDateRange(shift, start, end) {
   return (!start || shift.date >= start) && (!end || shift.date <= end);
 }
+const norm = text => String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const matchesQuery = (shift, query) => !query || norm(`${shift.name || ""} ${shift.notes || ""}`).includes(norm(query.trim()));
+const isOverdue = shift => isPayable(shift) && remainingCents(shift) > 0 && shift.expectedPaymentDate && shift.expectedPaymentDate < today;
 function renderSummary() {
-  const active = shifts.filter(shift => shift.status !== "cancelled");
+  const range = shifts.filter(shift => shiftInDateRange(shift, $("#listStart").value, $("#listEnd").value));
+  const active = range.filter(isActive);
   $("#summaryShifts").textContent = active.length;
   $("#summaryHours").textContent = `${sum(active.map(shift => shift.durationHours))} h`;
   $("#summaryExpected").textContent = formatMoney(sum(active.map(shift => shift.valueCents)));
-  $("#summaryPending").textContent = formatMoney(sum(shifts.filter(isPayable).map(remainingCents)));
+  $("#summaryPending").textContent = formatMoney(sum(range.filter(isPayable).map(remainingCents)));
 }
 function renderShiftCard(shift, finance = false) {
-  const start = getShiftStart(shift);
-  const end = getShiftEnd(shift);
-  const paid = getPaidCents(shift);
-  const payable = isPayable(shift);
-  const pending = remainingCents(shift);
+  const start = getShiftStart(shift), end = getShiftEnd(shift), paid = getPaidCents(shift), payable = isPayable(shift);
+  const id = escapeHtml(shift.id);
+  const title = shift.name ? `${escapeHtml(shift.name)} · ` : "";
+  const pay = shift.expectedPaymentDate ? ` · Recebimento: ${escapeHtml(formatDate(shift.expectedPaymentDate))}${isOverdue(shift) ? " (atrasado)" : ""}` : "";
   return `<article class="shift-card">
-    <div class="shift-main"><strong>${escapeHtml(formatDate(shift.date))} · ${escapeHtml(formatTime(start))}–${escapeHtml(formatTime(end))}</strong>
-      <small>${Number(shift.durationHours)} h · ${escapeHtml(shift.origin === "schedule" ? "Gerado por escala" : "Cadastro manual")}${shift.notes ? ` · ${escapeHtml(shift.notes)}` : ""}</small>
-      <span class="status ${shift.status}">${statusLabel(shift.status)}</span>
+    <div class="shift-main"><strong>${title}${escapeHtml(formatDate(shift.date))} · ${escapeHtml(formatTime(start))}–${escapeHtml(formatTime(end))}</strong>
+      <small>${Number(shift.durationHours)} h · ${shift.origin === "schedule" ? "Gerado por escala" : "Cadastro manual"}${pay}${shift.notes ? ` · ${escapeHtml(shift.notes)}` : ""}</small>
+      <span class="status ${escapeHtml(shift.status)}">${statusLabel(shift.status)}</span>
     </div>
     <div class="shift-meta"><span>Valor do plantão</span><strong>${formatMoney(shift.valueCents)}</strong></div>
-    <div class="shift-meta"><span>${finance ? "Recebido / pendente" : "Pagamento registrado"}</span><strong>${formatMoney(paid)}${finance ? ` / ${formatMoney(payable ? pending : 0)}` : ""}</strong></div>
+    <div class="shift-meta"><span>${finance ? "Recebido / pendente" : "Pagamento registrado"}</span><strong>${formatMoney(paid)}${finance ? ` / ${formatMoney(payable ? remainingCents(shift) : 0)}` : ""}</strong></div>
     <div class="card-actions">
-      ${finance ? `<button class="small-button" data-action="payment" data-id="${shift.id}">Registrar pagamento</button>` : ""}
-      <button class="small-button" data-action="edit" data-id="${shift.id}">Editar</button>
+      ${payable ? `<button class="small-button" data-action="payment" data-id="${id}">Registrar pagamento</button>` : ""}
+      <button class="small-button" data-action="edit" data-id="${id}">Editar</button>
     </div>
   </article>`;
 }
 function renderShiftList() {
-  const start = $("#listStart").value;
-  const end = $("#listEnd").value;
-  const status = $("#statusFilter").value;
-  const filtered = shifts.filter(shift => shiftInDateRange(shift, start, end) && (status === "all" || shift.status === status));
+  const start = $("#listStart").value, end = $("#listEnd").value, status = $("#statusFilter").value, query = $("#searchShifts").value;
+  const filtered = shifts.filter(shift => shiftInDateRange(shift, start, end) && (status === "all" || shift.status === status) && matchesQuery(shift, query));
   $("#shiftList").innerHTML = filtered.map(shift => renderShiftCard(shift)).join("");
   $("#emptyShifts").classList.toggle("visible", filtered.length === 0);
 }
+function financeData() {
+  const monthValue = $("#financeMonth").value || toLocalMonthInput(new Date());
+  const byPayment = $("#financeRef").value === "payment";
+  const query = $("#financeSearch").value;
+  const scoped = shifts.filter(shift => (byPayment ? isSameMonth(shift.expectedPaymentDate, monthValue) : isSameMonth(shift.date, monthValue)) && matchesQuery(shift, query));
+  const payments = shifts.filter(shift => matchesQuery(shift, query)).flatMap(shift =>
+    (shift.payments || []).filter(payment => isSameMonth(payment.date, monthValue)).map(payment => ({ ...payment, shift })));
+  return {
+    monthValue, scoped, payments,
+    rows: scoped.filter(shift => isActive(shift) || isPayable(shift) || getPaidCents(shift) > 0),
+    totals: {
+      expected: sum(scoped.filter(isActive).map(shift => shift.valueCents)),
+      earned: sum(scoped.filter(isPayable).map(shift => shift.valueCents)),
+      received: sum(payments.map(payment => payment.amountCents)),
+      pending: sum(scoped.filter(isPayable).map(remainingCents))
+    }
+  };
+}
 function renderFinance() {
-  const selectedMonth = $("#financeMonth").value || toLocalMonthInput(new Date());
-  const inMonth = shifts.filter(shift => isSameMonth(shift.date, selectedMonth));
-  const expected = sum(inMonth.filter(shift => shift.status !== "cancelled").map(shift => shift.valueCents));
-  const earned = sum(inMonth.filter(isPayable).map(shift => shift.valueCents));
-  const receivedThisMonth = sum(shifts.flatMap(shift => (shift.payments || []).filter(payment => isSameMonth(payment.date, selectedMonth)).map(payment => payment.amountCents)));
-  const pending = sum(inMonth.filter(isPayable).map(remainingCents));
-  $("#financeExpected").textContent = formatMoney(expected);
-  $("#financeEarned").textContent = formatMoney(earned);
-  $("#financeReceived").textContent = formatMoney(receivedThisMonth);
-  $("#financePending").textContent = formatMoney(pending);
-  $("#financeList").innerHTML = sortShifts(inMonth.filter(isPayable)).map(shift => renderShiftCard(shift, true)).join("");
+  const { scoped, totals } = financeData();
+  $("#financeExpected").textContent = formatMoney(totals.expected);
+  $("#financeEarned").textContent = formatMoney(totals.earned);
+  $("#financeReceived").textContent = formatMoney(totals.received);
+  $("#financePending").textContent = formatMoney(totals.pending);
+  // Plantões que já têm pagamentos continuam visíveis mesmo se a situação mudou.
+  $("#financeList").innerHTML = sortShifts(scoped.filter(shift => isPayable(shift) || getPaidCents(shift) > 0)).map(shift => renderShiftCard(shift, true)).join("");
 }
 function renderAll() {
+  $("#nameList").innerHTML = [...new Set(shifts.map(shift => shift.name).filter(Boolean))].map(name => `<option value="${escapeHtml(name)}">`).join("");
   renderSummary();
   renderShiftList();
   renderFinance();
@@ -151,7 +170,7 @@ $("#scheduleForm").addEventListener("submit", event => {
       generationPreview = generateWeeklyShifts({ ...common, weekdays: selectedWeekdays() });
     } else {
       const preset = $("#cyclePreset").value;
-      let workHours = common.durationHours;
+      let workHours = 12; // 12x36 e 12x48 sempre usam 12 h de trabalho
       let restHours = preset === "12x36" ? 36 : preset === "12x48" ? 48 : Number($("#customRestHours").value);
       if (preset === "custom") workHours = Number($("#customWorkHours").value);
       if (workHours !== common.durationHours) common.durationHours = workHours;
@@ -162,6 +181,9 @@ $("#scheduleForm").addEventListener("submit", event => {
       });
     }
     if (!generationPreview.length) throw new Error("Nenhum plantão foi gerado nesse período. Confira os dias e as datas.");
+    const rule = readRule(), scheduleName = $("#scheduleName").value.trim();
+    generationPreview.forEach(shift => { shift.name = scheduleName; shift.paymentRule = rule; shift.expectedPaymentDate = expectedPaymentDate(rule, shift.date); });
+    saveRule(rule);
     previewConflicts = detectConflicts(generationPreview, shifts);
     renderPreview();
   } catch (error) {
@@ -191,6 +213,9 @@ $("#confirmGenerate").addEventListener("click", async () => {
     $("#previewWrap").classList.add("hidden");
     generationPreview = [];
     previewConflicts = [];
+    const savedDates = accepted.map(shift => shift.date).sort();
+    if (!$("#listStart").value || savedDates[0] < $("#listStart").value) $("#listStart").value = savedDates[0];
+    if (!$("#listEnd").value || savedDates.at(-1) > $("#listEnd").value) $("#listEnd").value = savedDates.at(-1);
     await refreshData();
     toast(`${accepted.length} plantão(ões) salvo(s).`);
     setTab("calendario");
@@ -198,6 +223,7 @@ $("#confirmGenerate").addEventListener("click", async () => {
 });
 $("#cancelPreview").addEventListener("click", () => $("#previewWrap").classList.add("hidden"));
 
+let payTouched = false;
 function openShiftDialog(shift = null) {
   $("#shiftForm").reset();
   $("#shiftId").value = shift?.id || "";
@@ -209,12 +235,14 @@ function openShiftDialog(shift = null) {
   $("#shiftStatus").value = shift?.status || "scheduled";
   $("#cancelPay").value = shift?.cancellationPay ? "yes" : "no";
   $("#shiftNotes").value = shift?.notes || "";
+  $("#shiftName").value = shift?.name || "";
+  $("#shiftPayDate").value = shift ? (shift.expectedPaymentDate || "") : (expectedPaymentDate(loadRule(), $("#shiftDate").value) || "");
+  payTouched = !!shift;
   $("#deleteShift").classList.toggle("hidden", !shift);
   $("#cancelPayWrap").classList.toggle("hidden", $("#shiftStatus").value !== "cancelled");
   $("#shiftDialog").showModal();
 }
 $("#newShiftBtn").addEventListener("click", () => openShiftDialog());
-$$("[data-action='edit']").forEach(() => {});
 document.addEventListener("click", event => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
@@ -248,16 +276,15 @@ $("#shiftForm").addEventListener("submit", async event => {
       valueCents,
       status: $("#shiftStatus").value,
       cancellationPay: $("#shiftStatus").value === "cancelled" && $("#cancelPay").value === "yes",
+      name: $("#shiftName").value.trim(),
+      expectedPaymentDate: $("#shiftPayDate").value || null,
       notes: $("#shiftNotes").value.trim(),
       updatedAt: new Date().toISOString()
     };
-    if (existing) {
-      const conflicts = shifts.filter(item => item.id !== existing.id && new Date(shift.startAt) < new Date(item.endAt) && new Date(item.startAt) < new Date(shift.endAt));
-      if (conflicts.length && !confirm(`Este plantão se sobrepõe a ${conflicts.length} registro(s). Deseja salvar mesmo assim?`)) return;
-    } else {
-      const conflicts = shifts.filter(item => new Date(shift.startAt) < new Date(item.endAt) && new Date(item.startAt) < new Date(shift.endAt));
-      if (conflicts.length && !confirm(`Este plantão se sobrepõe a ${conflicts.length} registro(s). Deseja salvar mesmo assim?`)) return;
-    }
+    const conflicts = shift.status === "cancelled" ? [] : shifts.filter(item => item.id !== shift.id && isActive(item) && overlaps(shift, item));
+    if (conflicts.length && !confirm(`Este plantão se sobrepõe a ${conflicts.length} registro(s). Deseja salvar mesmo assim?`)) return;
+    if (existing?.payments?.length && (!isPayable(shift) || shift.valueCents < getPaidCents(existing)) &&
+      !confirm("Este plantão já tem pagamentos registrados e a nova situação ou o novo valor deixa o saldo inconsistente. Salvar mesmo assim?")) return;
     await putShift(db, shift);
     $("#shiftDialog").close();
     await refreshData();
@@ -302,27 +329,31 @@ $("#paymentForm").addEventListener("submit", async event => {
     if (amountCents > outstanding) throw new Error("O valor recebido não pode ultrapassar o saldo pendente deste plantão.");
     const date = $("#paymentDate").value;
     if (!date) throw new Error("Informe a data do recebimento.");
-    shift.payments = [...(shift.payments || []), {
+    await putShift(db, { ...shift, updatedAt: new Date().toISOString(), payments: [...(shift.payments || []), {
       id: crypto.randomUUID(), amountCents, date,
       notes: $("#paymentNotes").value.trim(), createdAt: new Date().toISOString()
-    }];
-    shift.updatedAt = new Date().toISOString();
-    await putShift(db, shift);
+    }] });
     $("#paymentDialog").close();
     await refreshData();
     toast("Recebimento registrado.");
   } catch (error) { toast(error.message || "Não foi possível registrar o pagamento."); }
 });
 
-$("#listStart").addEventListener("change", renderShiftList);
-$("#listEnd").addEventListener("change", renderShiftList);
+const refreshList = () => { renderSummary(); renderShiftList(); };
+$("#listStart").addEventListener("change", refreshList);
+$("#listEnd").addEventListener("change", refreshList);
+$("#searchShifts").addEventListener("input", renderShiftList);
+$("#financeRef").addEventListener("change", renderFinance);
+$("#financeSearch").addEventListener("input", renderFinance);
+$("#shiftDate").addEventListener("change", () => { if (!payTouched) $("#shiftPayDate").value = expectedPaymentDate(loadRule(), $("#shiftDate").value) || ""; });
+$("#shiftPayDate").addEventListener("input", () => { payTouched = true; });
 $("#statusFilter").addEventListener("change", renderShiftList);
 $("#financeMonth").addEventListener("change", renderFinance);
 
 $("#exportBackup").addEventListener("click", () => {
   const payload = {
     app: "Plantão Fácil",
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: new Date().toISOString(),
     shifts
   };
@@ -330,7 +361,7 @@ $("#exportBackup").addEventListener("click", () => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `plantao-facil-backup-${today}.json`;
+  link.download = `plantao-facil-backup-${toLocalDateInput(new Date())}.json`;
   link.click();
   URL.revokeObjectURL(url);
   toast("Backup exportado.");
@@ -340,14 +371,15 @@ $("#importBackup").addEventListener("change", async event => {
   if (!file) return;
   try {
     const payload = JSON.parse(await file.text());
-    if (payload.app !== "Plantão Fácil" || payload.schemaVersion !== 1 || !Array.isArray(payload.shifts)) {
+    if (payload.app !== "Plantão Fácil" || ![1, 2].includes(payload.schemaVersion) || !Array.isArray(payload.shifts)) {
       throw new Error("O arquivo não parece ser um backup válido do Plantão Fácil.");
     }
     const valid = payload.shifts.every(shift =>
       shift && typeof shift.id === "string" && typeof shift.startAt === "string" &&
       typeof shift.endAt === "string" && Number.isFinite(shift.valueCents) &&
       ["scheduled", "completed", "cancelled"].includes(shift.status) &&
-      Array.isArray(shift.payments)
+      typeof shift.date === "string" && Number.isFinite(shift.durationHours) &&
+      Array.isArray(shift.payments) && shift.payments.every(p => p && Number.isFinite(p.amountCents) && typeof p.date === "string")
     );
     if (!valid) throw new Error("O backup contém registros inválidos.");
     if (!confirm(`O backup contém ${payload.shifts.length} plantão(ões). Restaurar substituirá os dados atuais. Faça backup antes. Continuar?`)) return;
@@ -356,6 +388,81 @@ $("#importBackup").addEventListener("change", async event => {
     toast("Backup restaurado.");
   } catch (error) { toast(error.message || "Não foi possível restaurar o backup."); }
   finally { event.target.value = ""; }
+});
+
+// ---- Tema ----
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#0f1a15" : "#14251f";
+}
+applyTheme(document.documentElement.dataset.theme || "light");
+$("#themeBtn").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(next);
+  try { localStorage.setItem("pf-theme", next); } catch {}
+});
+
+// ---- Forma de pagamento ----
+const RULE_KEY = "pf-rule";
+function loadRule() { try { return JSON.parse(localStorage.getItem(RULE_KEY)) || { type: "manual" }; } catch { return { type: "manual" }; } }
+function saveRule(rule) { try { localStorage.setItem(RULE_KEY, JSON.stringify(rule)); } catch {} }
+function readRule() {
+  const type = $("#ruleType").value;
+  if (type === "manual") return { type };
+  const monthOffset = Number($("#ruleOffset").value);
+  if (type === "business_day") return { type, n: Number($("#ruleN").value) || 5, monthOffset, saturday: $("#ruleSat").checked };
+  if (type === "last_day") return { type, monthOffset };
+  const days = [...new Set($("#ruleDays").value.split(/[,;\s]+/).map(Number).filter(day => Number.isInteger(day) && day >= 1 && day <= 31))];
+  if (!days.length) throw new Error("Informe os dias do mês, como 10, 25.");
+  return { type, days };
+}
+function syncRuleFields() {
+  const type = $("#ruleType").value;
+  $("#ruleExtra").classList.toggle("hidden", type === "manual");
+  $("#ruleNWrap").classList.toggle("hidden", type !== "business_day");
+  $("#ruleSatWrap").classList.toggle("hidden", type !== "business_day");
+  $("#ruleDaysWrap").classList.toggle("hidden", type !== "month_days");
+  $("#ruleOffsetWrap").classList.toggle("hidden", type === "month_days");
+}
+$("#ruleType").addEventListener("change", syncRuleFields);
+(() => {
+  const rule = loadRule();
+  $("#ruleType").value = rule.type;
+  if (rule.n) $("#ruleN").value = rule.n;
+  if (rule.days) $("#ruleDays").value = rule.days.join(", ");
+  if (rule.monthOffset != null) $("#ruleOffset").value = rule.monthOffset;
+  $("#ruleSat").checked = !!rule.saturday;
+  syncRuleFields();
+})();
+
+// ---- Exportações ----
+$("#exportIcs").addEventListener("click", () => {
+  const list = shifts.filter(shift => isActive(shift) && shiftInDateRange(shift, $("#listStart").value, $("#listEnd").value) && matchesQuery(shift, $("#searchShifts").value));
+  if (!list.length) return toast("Nenhum plantão no filtro atual para exportar.");
+  download(`escala-${$("#listStart").value || "completa"}.ics`, buildIcs(list), "text/calendar");
+  toast(`${list.length} plantão(ões) exportado(s) para o calendário.`);
+});
+$("#exportCsv").addEventListener("click", () => {
+  const { monthValue, rows } = financeData();
+  if (!rows.length) return toast("Nada para exportar neste mês.");
+  const header = ["Data", "Início", "Nome", "Horas", "Situação", "Valor", "Pago", "Pendente", "Recebimento previsto"];
+  const lines = sortShifts(rows).map(shift => [formatDate(shift.date), formatTime(getShiftStart(shift)), shift.name || "", String(shift.durationHours).replace(".", ","),
+    statusLabel(shift.status), csvMoney(shift.valueCents), csvMoney(getPaidCents(shift)), csvMoney(isPayable(shift) ? remainingCents(shift) : 0),
+    shift.expectedPaymentDate ? formatDate(shift.expectedPaymentDate) : ""]);
+  download(`financeiro-${monthValue}.csv`, buildCsv(header, lines), "text/csv;charset=utf-8");
+  toast("CSV exportado.");
+});
+$("#exportPdf").addEventListener("click", () => {
+  const { monthValue, rows, payments, totals } = financeData();
+  if (!rows.length && !payments.length) return toast("Nada para o relatório neste mês.");
+  const [year, mon] = monthValue.split("-");
+  const shiftRows = sortShifts(rows).map(shift => `<tr><td>${formatDate(shift.date)}</td><td>${escapeHtml(shift.name || "—")}</td><td>${shift.durationHours} h</td><td>${statusLabel(shift.status)}</td><td>${formatMoney(shift.valueCents)}</td><td>${formatMoney(getPaidCents(shift))}</td><td>${formatMoney(isPayable(shift) ? remainingCents(shift) : 0)}</td><td>${shift.expectedPaymentDate ? formatDate(shift.expectedPaymentDate) : "—"}</td></tr>`).join("");
+  const payRows = payments.sort((x, y) => x.date.localeCompare(y.date)).map(payment => `<tr><td>${formatDate(payment.date)}</td><td>${escapeHtml(payment.shift.name || "—")}</td><td>${formatDate(payment.shift.date)}</td><td>${formatMoney(payment.amountCents)}</td></tr>`).join("");
+  $("#printReport").innerHTML = `<h1>Relatório financeiro — ${mon}/${year}</h1>
+    <p>Previsto: <b>${formatMoney(totals.expected)}</b> · Devido por trabalho realizado: <b>${formatMoney(totals.earned)}</b> · Recebido no mês: <b>${formatMoney(totals.received)}</b> · Pendente: <b>${formatMoney(totals.pending)}</b></p>
+    <h2>Plantões</h2><table><thead><tr><th>Data</th><th>Nome</th><th>Duração</th><th>Situação</th><th>Valor</th><th>Pago</th><th>Pendente</th><th>Recebimento previsto</th></tr></thead><tbody>${shiftRows}</tbody></table>
+    <h2>Pagamentos recebidos no mês</h2><table><thead><tr><th>Recebido em</th><th>Plantão</th><th>Data do plantão</th><th>Valor</th></tr></thead><tbody>${payRows || "<tr><td colspan=4>Nenhum pagamento no mês.</td></tr>"}</tbody></table>`;
+  window.print();
 });
 
 let deferredInstallPrompt = null;
@@ -378,6 +485,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
 async function init() {
   try {
     db = await openDatabase();
+    navigator.storage?.persist?.();
     await refreshData();
   } catch (error) {
     toast(error.message || "Erro ao iniciar o aplicativo.");

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#14251f">
+  <meta name="description" content="Organize seus plantões e acompanhe seus ganhos.">
+  <title>Plantão Fácil</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./src/styles/main.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#inicio" aria-label="Plantão Fácil - início">
+        <span class="brand-mark">PF</span>
+        <span><strong>Plantão Fácil</strong><small>Sua escala, sem complicação.</small></span>
+      </a>
+      <button id="installBtn" class="button button-quiet hidden" type="button">Instalar aplicativo</button>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">CONTROLE DE PLANTÕES</p>
+          <h1>Seu trabalho.<br><span>Suas contas em dia.</span></h1>
+          <p class="hero-copy">Organize sua escala, acompanhe suas horas e saiba quanto tem a receber.</p>
+        </div>
+        <div class="hero-icon" aria-hidden="true">✳</div>
+      </section>
+
+      <section class="summary-grid" aria-label="Resumo do período">
+        <article class="summary-card">
+          <span class="summary-label">Plantões no período</span>
+          <strong id="summaryShifts">0</strong>
+          <small>Programados e realizados</small>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Horas registradas</span>
+          <strong id="summaryHours">0 h</strong>
+          <small>Conforme os plantões cadastrados</small>
+        </article>
+        <article class="summary-card summary-highlight">
+          <span class="summary-label">Ganhos previstos</span>
+          <strong id="summaryExpected">R$ 0,00</strong>
+          <small>Plantões programados e realizados</small>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">A receber</span>
+          <strong id="summaryPending">R$ 0,00</strong>
+          <small>Plantões realizados e não quitados</small>
+        </article>
+      </section>
+
+      <nav class="tabs" aria-label="Seções">
+        <button class="tab active" data-tab="escala" type="button">Minha escala</button>
+        <button class="tab" data-tab="calendario" type="button">Plantões</button>
+        <button class="tab" data-tab="financeiro" type="button">Financeiro</button>
+        <button class="tab" data-tab="backup" type="button">Backup</button>
+      </nav>
+
+      <section id="panel-escala" class="panel active">
+        <div class="section-heading">
+          <div><p class="eyebrow">PLANEJAMENTO</p><h2>Monte sua escala</h2></div>
+          <span class="pill">Salvo neste dispositivo</span>
+        </div>
+        <div class="mode-switch" role="group" aria-label="Tipo de escala">
+          <button type="button" class="mode-button active" data-mode="weekly">Dias da semana</button>
+          <button type="button" class="mode-button" data-mode="cycle">Ciclo de trabalho</button>
+        </div>
+        <form id="scheduleForm" class="form-card">
+          <div id="weeklyFields">
+            <label class="field-label">Quais dias você trabalha?</label>
+            <div class="weekday-picker" id="weekdayPicker">
+              <label><input type="checkbox" value="0"><span>Dom</span></label>
+              <label><input type="checkbox" value="1"><span>Seg</span></label>
+              <label><input type="checkbox" value="2"><span>Ter</span></label>
+              <label><input type="checkbox" value="3"><span>Qua</span></label>
+              <label><input type="checkbox" value="4"><span>Qui</span></label>
+              <label><input type="checkbox" value="5"><span>Sex</span></label>
+              <label><input type="checkbox" value="6"><span>Sáb</span></label>
+            </div>
+            <p class="field-help">Selecione um ou mais dias. O sistema gera os plantões nesses dias dentro do período escolhido.</p>
+          </div>
+
+          <div id="cycleFields" class="hidden">
+            <label class="field-label" for="cyclePreset">Ciclo de trabalho e descanso</label>
+            <select id="cyclePreset">
+              <option value="12x36">12h de trabalho + 36h de descanso (12x36)</option>
+              <option value="12x48">12h de trabalho + 48h de descanso (12x48)</option>
+              <option value="custom">Personalizado</option>
+            </select>
+            <div id="customCycleFields" class="form-grid hidden">
+              <label>Horas de trabalho<input id="customWorkHours" type="number" min="1" max="48" step="0.5" value="12"></label>
+              <label>Horas de descanso<input id="customRestHours" type="number" min="1" max="240" step="0.5" value="36"></label>
+            </div>
+            <label class="field-label" for="cycleStartDate">Data do primeiro plantão</label>
+            <input id="cycleStartDate" type="date">
+            <p class="field-help">O ciclo calcula cada início a partir do plantão anterior, sem depender dos dias da semana.</p>
+          </div>
+
+          <div class="form-grid">
+            <label>Horário de início<input id="startTime" type="time" value="07:00" required></label>
+            <label>Valor padrão por plantão (R$)<input id="defaultValue" type="number" min="0" step="0.01" value="300.00" required></label>
+          </div>
+
+          <label class="field-label">Duração do plantão</label>
+          <div class="duration-picker" id="durationPicker">
+            <label><input type="radio" name="duration" value="1"><span>1 hora</span></label>
+            <label><input type="radio" name="duration" value="3"><span>3 horas</span></label>
+            <label><input type="radio" name="duration" value="8"><span>8 horas</span></label>
+            <label><input type="radio" name="duration" value="12" checked><span>12 horas</span></label>
+            <label><input type="radio" name="duration" value="custom"><span>Personalizar</span></label>
+          </div>
+          <label id="customDurationField" class="field-label hidden">Duração personalizada (horas)
+            <input id="customDuration" type="number" min="0.5" max="48" step="0.5" value="6">
+          </label>
+
+          <div class="form-grid">
+            <label>Gerar a partir de<input id="periodStart" type="date" required></label>
+            <label>Gerar até<input id="periodEnd" type="date" required></label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="button button-primary">Pré-visualizar escala</button>
+            <button type="button" id="clearScheduleForm" class="button button-secondary">Limpar seleção</button>
+          </div>
+        </form>
+        <div id="previewWrap" class="preview-wrap hidden">
+          <div class="section-heading"><div><p class="eyebrow">REVISÃO</p><h3>Pré-visualização</h3></div><span id="previewCount" class="pill">0 plantões</span></div>
+          <p id="previewMessage" class="muted"></p>
+          <div class="table-wrap"><table><thead><tr><th>Data</th><th>Início</th><th>Término</th><th>Duração</th><th>Valor</th><th>Conflito</th></tr></thead><tbody id="previewBody"></tbody></table></div>
+          <div class="form-actions"><button id="confirmGenerate" class="button button-primary" type="button">Confirmar e salvar</button><button id="cancelPreview" class="button button-secondary" type="button">Cancelar</button></div>
+        </div>
+      </section>
+
+      <section id="panel-calendario" class="panel">
+        <div class="section-heading"><div><p class="eyebrow">REGISTROS</p><h2>Seus plantões</h2></div><button id="newShiftBtn" class="button button-primary" type="button">+ Novo plantão</button></div>
+        <div class="filter-row">
+          <label>De<input id="listStart" type="date"></label>
+          <label>Até<input id="listEnd" type="date"></label>
+          <label>Situação<select id="statusFilter"><option value="all">Todas</option><option value="scheduled">Programado</option><option value="completed">Realizado</option><option value="cancelled">Cancelado</option></select></label>
+        </div>
+        <div id="shiftList" class="shift-list"></div>
+        <div id="emptyShifts" class="empty-state"><span>◷</span><h3>Nenhum plantão por aqui ainda</h3><p>Monte sua escala ou cadastre um plantão manualmente.</p></div>
+      </section>
+
+      <section id="panel-financeiro" class="panel">
+        <div class="section-heading"><div><p class="eyebrow">DINHEIRO</p><h2>Resumo financeiro</h2></div></div>
+        <div class="filter-row">
+          <label>Mês de referência<input id="financeMonth" type="month"></label>
+        </div>
+        <section class="finance-grid">
+          <article class="finance-card"><span>Previsto no mês</span><strong id="financeExpected">R$ 0,00</strong></article>
+          <article class="finance-card"><span>Devido por trabalho realizado</span><strong id="financeEarned">R$ 0,00</strong></article>
+          <article class="finance-card"><span>Recebido neste mês</span><strong id="financeReceived">R$ 0,00</strong></article>
+          <article class="finance-card"><span>Pendente de plantões realizados</span><strong id="financePending">R$ 0,00</strong></article>
+        </section>
+        <div class="section-heading subheading"><div><h3>Plantões realizados e pagamentos</h3><p class="muted">Registre o pagamento em cada plantão. Pagamentos parciais são permitidos.</p></div></div>
+        <div id="financeList" class="shift-list"></div>
+      </section>
+
+      <section id="panel-backup" class="panel">
+        <div class="section-heading"><div><p class="eyebrow">SEUS DADOS</p><h2>Backup e restauração</h2></div></div>
+        <div class="form-card backup-card">
+          <div class="backup-icon">⇅</div>
+          <h3>Seus dados ficam no dispositivo</h3>
+          <p class="muted">A primeira versão não envia seus registros para um servidor. Exporte um backup de tempos em tempos, especialmente antes de limpar os dados do navegador ou trocar de aparelho.</p>
+          <div class="form-actions"><button id="exportBackup" class="button button-primary" type="button">Exportar backup</button><label class="button button-secondary file-button">Restaurar backup<input id="importBackup" type="file" accept=".json,application/json" hidden></label></div>
+          <p class="field-help">Restaurar substitui os registros atuais. Faça um backup antes de continuar.</p>
+        </div>
+      </section>
+    </main>
+    <footer><span>Plantão Fácil <span id="appVersion">v0.1.0</span></span><span>Seus dados, no seu dispositivo.</span></footer>
+  </div>
+
+  <dialog id="shiftDialog" class="modal">
+    <form id="shiftForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">REGISTRO</p><h2 id="shiftDialogTitle">Novo plantão</h2></div><button type="button" id="closeShiftDialog" class="icon-button" aria-label="Fechar">×</button></div>
+      <input id="shiftId" type="hidden">
+      <label>Data de início<input id="shiftDate" type="date" required></label>
+      <div class="form-grid">
+        <label>Horário de início<input id="shiftStart" type="time" value="07:00" required></label>
+        <label>Duração (horas)<input id="shiftDuration" type="number" min="0.5" max="48" step="0.5" value="12" required></label>
+      </div>
+      <label>Valor do plantão (R$)<input id="shiftValue" type="number" min="0" step="0.01" value="300" required></label>
+      <div class="form-grid">
+        <label>Situação<select id="shiftStatus"><option value="scheduled">Programado</option><option value="completed">Realizado</option><option value="cancelled">Cancelado</option></select></label>
+        <label id="cancelPayWrap" class="hidden">Pagamento por cancelamento?<select id="cancelPay"><option value="no">Não</option><option value="yes">Sim</option></select></label>
+      </div>
+      <label>Observações (opcional)<textarea id="shiftNotes" rows="2" maxlength="1000"></textarea></label>
+      <div class="modal-actions"><button type="button" id="deleteShift" class="button button-danger hidden">Excluir</button><span class="spacer"></span><button type="button" id="cancelShiftEdit" class="button button-secondary">Voltar</button><button type="submit" class="button button-primary">Salvar plantão</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="paymentDialog" class="modal">
+    <form id="paymentForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">PAGAMENTO</p><h2>Registrar recebimento</h2></div><button type="button" id="closePaymentDialog" class="icon-button" aria-label="Fechar">×</button></div>
+      <input id="paymentShiftId" type="hidden">
+      <p id="paymentContext" class="muted"></p>
+      <label>Valor recebido (R$)<input id="paymentAmount" type="number" min="0.01" step="0.01" required></label>
+      <label>Data do recebimento<input id="paymentDate" type="date" required></label>
+      <label>Observação (opcional)<input id="paymentNotes" type="text" maxlength="300"></label>
+      <div id="paymentHistory" class="payment-history"></div>
+      <div class="modal-actions"><span class="spacer"></span><button type="button" id="cancelPayment" class="button button-secondary">Fechar</button><button type="submit" class="button button-primary">Salvar recebimento</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

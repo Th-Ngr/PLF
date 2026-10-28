@@ -7,16 +7,19 @@
   <meta name="description" content="Organize seus plantões e acompanhe seus ganhos.">
   <title>Plantão Fácil</title>
   <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <link rel="stylesheet" href="./src/styles/main.css">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("pf-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="#inicio" aria-label="Plantão Fácil - início">
-        <img src="img/PLF-lg-01.png" alt="Logo Plantão Fácil" class="site-logo">
+        <span class="brand-mark">PF</span>
         <span><strong>Plantão Fácil</strong><small>Sua escala, sem complicação.</small></span>
       </a>
-      <button id="installBtn" class="button button-quiet hidden" type="button">Instalar aplicativo</button>
+      <div class="top-actions"><button id="themeBtn" class="button button-quiet" type="button">◐ Tema</button><button id="installBtn" class="button button-quiet hidden" type="button">Instalar aplicativo</button></div>
     </header>
 
     <main>
@@ -26,7 +29,7 @@
           <h1>Seu trabalho.<br><span>Suas contas em dia.</span></h1>
           <p class="hero-copy">Organize sua escala, acompanhe suas horas e saiba quanto tem a receber.</p>
         </div>
-        <img src="img/PLF-lg-02.png" alt="Logo Plantão Fácil" class="site-logo2">
+        <div class="hero-icon" aria-hidden="true">✳</div>
       </section>
 
       <section class="summary-grid" aria-label="Resumo do período">
@@ -99,6 +102,8 @@
             <p class="field-help">O ciclo calcula cada início a partir do plantão anterior, sem depender dos dias da semana.</p>
           </div>
 
+          <label class="field-label" for="scheduleName">Nome / local (opcional)</label>
+          <input id="scheduleName" list="nameList" maxlength="80" placeholder="Ex.: Hospital Municipal">
           <div class="form-grid">
             <label>Horário de início<input id="startTime" type="time" value="07:00" required></label>
             <label>Valor padrão por plantão (R$)<input id="defaultValue" type="number" min="0" step="0.01" value="300.00" required></label>
@@ -116,6 +121,20 @@
             <input id="customDuration" type="number" min="0.5" max="48" step="0.5" value="6">
           </label>
 
+          <label class="field-label" for="ruleType">Forma de pagamento</label>
+          <select id="ruleType">
+            <option value="manual">Definir a data manualmente</option>
+            <option value="business_day">N-ésimo dia útil (ex.: 5º dia útil)</option>
+            <option value="last_day">Último dia do mês</option>
+            <option value="month_days">Dias específicos do mês</option>
+          </select>
+          <div id="ruleExtra" class="form-grid hidden">
+            <label id="ruleNWrap">Qual dia útil<input id="ruleN" type="number" min="1" max="22" value="5"></label>
+            <label id="ruleDaysWrap">Dias do mês (separados por vírgula)<input id="ruleDays" placeholder="10, 25"></label>
+            <label id="ruleOffsetWrap">Pago no<select id="ruleOffset"><option value="1">Mês seguinte ao plantão</option><option value="0">Mesmo mês do plantão</option></select></label>
+            <label id="ruleSatWrap"><input id="ruleSat" type="checkbox"> Sábado conta como dia útil</label>
+          </div>
+          <p class="field-help">A data de recebimento prevista é calculada para cada plantão e pode ser ajustada depois, individualmente.</p>
           <div class="form-grid">
             <label>Gerar a partir de<input id="periodStart" type="date" required></label>
             <label>Gerar até<input id="periodEnd" type="date" required></label>
@@ -134,11 +153,12 @@
       </section>
 
       <section id="panel-calendario" class="panel">
-        <div class="section-heading"><div><p class="eyebrow">REGISTROS</p><h2>Seus plantões</h2></div><button id="newShiftBtn" class="button button-primary" type="button">+ Novo plantão</button></div>
+        <div class="section-heading"><div><p class="eyebrow">REGISTROS</p><h2>Seus plantões</h2></div><div class="top-actions"><button id="exportIcs" class="button button-secondary" type="button">Exportar calendário (.ics)</button><button id="newShiftBtn" class="button button-primary" type="button">+ Novo plantão</button></div></div>
         <div class="filter-row">
           <label>De<input id="listStart" type="date"></label>
           <label>Até<input id="listEnd" type="date"></label>
           <label>Situação<select id="statusFilter"><option value="all">Todas</option><option value="scheduled">Programado</option><option value="completed">Realizado</option><option value="cancelled">Cancelado</option></select></label>
+          <label>Buscar<input id="searchShifts" type="search" placeholder="Nome ou observação"></label>
         </div>
         <div id="shiftList" class="shift-list"></div>
         <div id="emptyShifts" class="empty-state"><span>◷</span><h3>Nenhum plantão por aqui ainda</h3><p>Monte sua escala ou cadastre um plantão manualmente.</p></div>
@@ -148,6 +168,10 @@
         <div class="section-heading"><div><p class="eyebrow">DINHEIRO</p><h2>Resumo financeiro</h2></div></div>
         <div class="filter-row">
           <label>Mês de referência<input id="financeMonth" type="month"></label>
+          <label>Referência<select id="financeRef"><option value="shift">Mês do plantão</option><option value="payment">Mês do recebimento previsto</option></select></label>
+          <label>Buscar plantão<input id="financeSearch" type="search" placeholder="Nome ou observação"></label>
+          <button id="exportCsv" class="button button-secondary" type="button">Exportar CSV</button>
+          <button id="exportPdf" class="button button-secondary" type="button">Relatório PDF</button>
         </div>
         <section class="finance-grid">
           <article class="finance-card"><span>Previsto no mês</span><strong id="financeExpected">R$ 0,00</strong></article>
@@ -170,13 +194,14 @@
         </div>
       </section>
     </main>
-    <footer><span>Plantão Fácil <span id="appVersion">v0.1.0</span></span><span>Seus dados, no seu dispositivo.</span></footer>
+    <footer><span>Plantão Fácil <span id="appVersion">v0.2.0</span></span><span>Seus dados, no seu dispositivo.</span></footer>
   </div>
 
   <dialog id="shiftDialog" class="modal">
     <form id="shiftForm" method="dialog">
       <div class="modal-heading"><div><p class="eyebrow">REGISTRO</p><h2 id="shiftDialogTitle">Novo plantão</h2></div><button type="button" id="closeShiftDialog" class="icon-button" aria-label="Fechar">×</button></div>
       <input id="shiftId" type="hidden">
+      <label>Nome / local (opcional)<input id="shiftName" list="nameList" maxlength="80"></label>
       <label>Data de início<input id="shiftDate" type="date" required></label>
       <div class="form-grid">
         <label>Horário de início<input id="shiftStart" type="time" value="07:00" required></label>
@@ -187,6 +212,7 @@
         <label>Situação<select id="shiftStatus"><option value="scheduled">Programado</option><option value="completed">Realizado</option><option value="cancelled">Cancelado</option></select></label>
         <label id="cancelPayWrap" class="hidden">Pagamento por cancelamento?<select id="cancelPay"><option value="no">Não</option><option value="yes">Sim</option></select></label>
       </div>
+      <label>Recebimento previsto<input id="shiftPayDate" type="date"></label>
       <label>Observações (opcional)<textarea id="shiftNotes" rows="2" maxlength="1000"></textarea></label>
       <div class="modal-actions"><button type="button" id="deleteShift" class="button button-danger hidden">Excluir</button><span class="spacer"></span><button type="button" id="cancelShiftEdit" class="button button-secondary">Voltar</button><button type="submit" class="button button-primary">Salvar plantão</button></div>
     </form>
@@ -206,6 +232,8 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <datalist id="nameList"></datalist>
+  <div id="printReport" class="print-only"></div>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>

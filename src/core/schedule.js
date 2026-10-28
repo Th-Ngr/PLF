@@ -34,6 +34,7 @@ export function buildShift({ date, startTime, durationHours, valueCents, origin 
 export function generateWeeklyShifts({ weekdays, startDate, endDate, startTime, durationHours, value }) {
   if (!weekdays.length) throw new Error("Selecione pelo menos um dia da semana.");
   if (!startDate || !endDate || startDate > endDate) throw new Error("Informe um período válido.");
+  if ((new Date(`${endDate}T12:00:00`) - new Date(`${startDate}T12:00:00`)) / 864e5 > 3700) throw new Error("O período é grande demais (máximo de 10 anos).");
   const valueCents = toCents(value);
   const result = [];
   const cursor = new Date(`${startDate}T12:00:00`);
@@ -87,9 +88,13 @@ export function overlaps(a, b) {
   return new Date(a.startAt) < new Date(b.endAt) && new Date(b.startAt) < new Date(a.endAt);
 }
 
+export const isActive = shift => shift.status !== "cancelled";
+
+// Plantões cancelados não bloqueiam horário; candidatos também são comparados entre si.
 export function detectConflicts(candidates, existing) {
-  return candidates.map(candidate => ({
+  const active = existing.filter(isActive);
+  return candidates.map((candidate, i) => ({
     shift: candidate,
-    conflicts: existing.filter(item => overlaps(candidate, item))
+    conflicts: [...active, ...candidates.slice(0, i)].filter(item => overlaps(candidate, item))
   }));
 }

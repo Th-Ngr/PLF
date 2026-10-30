@@ -1,4 +1,4 @@
-const CACHE_NAME = "plantao-facil-v0.3.3";
+const CACHE_NAME = "plantao-facil-v0.3.4";
 const APP_FILES = [
   "./", "./index.html", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png",

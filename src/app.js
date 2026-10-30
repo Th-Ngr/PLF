@@ -738,12 +738,6 @@ $("#exportPdf").addEventListener("click", () => {
   window.print();
 });
 
-
-
-// ---- Configuração de PWA e Botão de Instalação ----
-let deferredPrompt;
-const installBtn = $("#installBtn");
-
 // 1. Registra o Service Worker
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -753,48 +747,3 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-// 2. Intercepta o evento nativo de instalação
-window.addEventListener("beforeinstallprompt", event => {
-  // Impede que o navegador exiba o banner padrão imediatamente
-  event.preventDefault();
-  deferredPrompt = event;
-
-  // Mostra o botão de instalação
-  if (installBtn) {
-    installBtn.classList.remove("hidden");
-  }
-});
-
-// 3. Ação ao clicar no botão de instalação
-if (installBtn) {
-  installBtn.addEventListener("click", async () => {
-    if (!deferredPrompt) {
-      toast("O navegador ainda não está pronto para instalar. Tente abrir via Servidor Local (Live Server).");
-      return;
-    }
-
-    // Exibe o prompt nativo do sistema
-    deferredPrompt.prompt();
-
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === "accepted") {
-      toast("Aplicativo instalado com sucesso!");
-    }
-
-    // Limpa a referência e esconde o botão
-    deferredPrompt = null;
-    installBtn.classList.add("hidden");
-  });
-}
-
-// Oculta o botão se o app já estiver instalado
-window.addEventListener("appinstalled", () => {
-  deferredPrompt = null;
-  if (installBtn) installBtn.classList.add("hidden");
-  toast("Plantão Fácil instalado!");
-});
-
-// [DICA DE TESTE] Se quiser forçar o botão a aparecer no PC para testar o clique, 
-// remova temporariamente o comentário da linha abaixo:
-// window.addEventListener("DOMContentLoaded", () => { if(installBtn) installBtn.classList.remove("hidden"); });

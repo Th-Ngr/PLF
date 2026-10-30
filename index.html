@@ -19,19 +19,12 @@
         <span class="brand-mark">PF</span>
         <span><strong>Plantão Fácil</strong><small>Sua escala, sem complicação.</small></span>
       </a>
-      <div class="top-actions"><button id="themeBtn" class="button button-quiet" type="button">◐ Tema</button><button id="installBtn" class="button button-quiet hidden" type="button">Instalar aplicativo</button></div>
+      <div class="top-actions"><button id="themeBtn" class="button button-quiet" type="button">◐ Tema</button>
+        <button id="installBtn" class="button button-quiet hidden" type="button">Instalar aplicativo</button>
+      </div>
     </header>
 
     <main>
-      <section class="hero">
-        <div>
-          <p class="eyebrow">CONTROLE DE PLANTÕES</p>
-          <h1>Seu trabalho.<br><span>Suas contas em dia.</span></h1>
-          <p class="hero-copy">Organize sua escala, acompanhe suas horas e saiba quanto tem a receber.</p>
-        </div>
-        <div class="hero-icon" aria-hidden="true">✳</div>
-      </section>
-
       <section class="summary-grid" aria-label="Resumo do período">
         <article class="summary-card">
           <span class="summary-label">Plantões no período</span>
@@ -153,7 +146,21 @@
       </section>
 
       <section id="panel-calendario" class="panel">
-        <div class="section-heading"><div><p class="eyebrow">REGISTROS</p><h2>Seus plantões</h2></div><div class="top-actions"><button id="exportIcs" class="button button-secondary" type="button">Exportar calendário (.ics)</button><button id="newShiftBtn" class="button button-primary" type="button">+ Novo plantão</button></div></div>
+        <div class="section-heading">
+
+            <div>
+              <p class="eyebrow">REGISTROS</p><h2>Seus plantões</h2>
+            </div>
+
+            <div class="top-actions">
+              <button id="exportIcs" class="button button-secondary" type="button">Exportar calendário (.ics)</button>
+              <button id="newShiftBtn" class="button button-primary" type="button">+ Novo plantão</button>
+              <button id="printCalendarBtn" class="button button-secondary" type="button"> Imprimir calendário</button>
+              
+            </div>
+
+        </div>
+
         <div class="filter-row">
           <label>De<input id="listStart" type="date"></label>
           <label>Até<input id="listEnd" type="date"></label>
@@ -234,6 +241,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <datalist id="nameList"></datalist>
   <div id="printReport" class="print-only"></div>
+  <section id="printCalendar" aria-label="Calendário mensal para impressão"></section>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>

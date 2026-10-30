@@ -5,6 +5,38 @@ import { toCents, formatMoney, sum } from "./core/money.js";
 import { expectedPaymentDate } from "./core/payment-rules.js";
 import { buildIcs, buildCsv, csvMoney, download } from "./core/exports.js";
 
+// 1. Registra o Service Worker
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch(err => {
+      console.error("Erro ao registrar Service Worker:", err);
+    });
+  });
+}
+// ---- Instalação do PWA ----
+let deferredInstallPrompt = null;
+
+window.addEventListener("beforeinstallprompt", event => {
+  event.preventDefault();              // impede o mini-aviso automático do navegador
+  deferredInstallPrompt = event;       // guarda o evento para usar no clique
+  $("#installBtn").classList.remove("hidden");
+});
+
+$("#installBtn").addEventListener("click", async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();                  // abre a janela de instalação
+  await deferredInstallPrompt.userChoice;          // espera o usuário aceitar ou recusar
+  deferredInstallPrompt = null;
+  $("#installBtn").classList.add("hidden");
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  $("#installBtn").classList.add("hidden");
+  toast("Aplicativo instalado.");
+});
+
+
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const APP_VERSION = "0.2.0";
@@ -746,4 +778,28 @@ if ("serviceWorker" in navigator) {
     });
   });
 }
+
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", event => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  $("#installBtn").classList.remove("hidden");
+});
+$("#installBtn").addEventListener("click", async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  $("#installBtn").classList.add("hidden");
+});
+window.addEventListener("appinstalled", () => $("#installBtn").classList.add("hidden"));
+
+async function init() {
+  try {
+    db = await openDatabase();
+    navigator.storage?.persist?.();
+    await refreshData();
+  } catch (error) { toast(error.message || "Não foi possível iniciar o app."); }
+}
+init();
 

@@ -695,28 +695,23 @@ $("#ruleType").addEventListener("change", syncRuleFields);
 // ---- Exportações ----
 $("#exportIcs").addEventListener("click", () => {
   const list = shifts.filter(shift => isActive(shift) && shiftInDateRange(shift, $("#listStart").value, $("#listEnd").value) && matchesQuery(shift, $("#searchShifts").value));
+  
   if (!list.length) return toast("Nenhum plantão no filtro atual para exportar.");
+
+  // Se for apenas 1 plantão ou se quisermos abrir o primeiro/principal no calendário:
+  // (Ou se preferir gerar o ICS via WebCal/Data URI sem o atributo 'download')
+  const shift = list[0]; // Exemplo pegando o primeiro do filtro para teste direto
   
-  // Gera o conteúdo do arquivo ICS
-  const icsContent = buildIcs(list);
+  const start = new Date(shift.startAt || shift.date).toISOString().replace(/-|:|\.\d\d\d/g, "");
+  const end = new Date(shift.endAt || shift.date).toISOString().replace(/-|:|\.\d\d\d/g, "");
+  const title = encodeURIComponent(shift.name || "Plantão Fácil");
+  const details = encodeURIComponent(`Plantão do sistema Plantão Fácil`);
+
+  // Abre diretamente a página de criação de evento do Google Agenda (funciona em celulares e PCs perfeitamente)
+  const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}`;
   
-  // Cria um link virtual em formato Data URI para forçar a abertura imediata
-  const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  
-  const link = document.createElement("a");
-  link.href = url;
-  // Definir um atributo target ou deixar como link direto aciona o manipulador de protocolo do SO
-  link.setAttribute("download", `escala-${$("#listStart").value || "completa"}.ics`);
-  
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  
-  // Limpa o objeto da memória após o clique
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  
-  toast(`${list.length} plantão(ões) enviados para o calendário.`);
+  window.open(googleCalendarUrl, '_blank');
+  toast("Abrindo no calendário...");
 });
 
 $("#exportCsv").addEventListener("click", () => {

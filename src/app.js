@@ -738,34 +738,7 @@ $("#exportPdf").addEventListener("click", () => {
   window.print();
 });
 
-let deferredInstallPrompt = null;
-window.addEventListener("beforeinstallprompt", event => {
-  event.preventDefault();
-  deferredInstallPrompt = event;
-  $("#installBtn").classList.remove("hidden");
-});
-$("#installBtn").addEventListener("click", async () => {
-  if (!deferredInstallPrompt) return;
-  deferredInstallPrompt.prompt();
-  await deferredInstallPrompt.userChoice;
-  deferredInstallPrompt = null;
-  $("#installBtn").classList.add("hidden");
-});
-if ("serviceWorker" in navigator && location.protocol !== "file:") {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js").catch(() => {}));
-}
 
-async function init() {
-  try {
-    db = await openDatabase();
-    navigator.storage?.persist?.();
-    await refreshData();
-  } catch (error) {
-    toast(error.message || "Erro ao iniciar o aplicativo.");
-    console.error(error);
-  }
-}
-init();
 
 // ---- Configuração de PWA e Botão de Instalação ----
 let deferredPrompt;

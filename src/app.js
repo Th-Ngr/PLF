@@ -87,8 +87,9 @@ function renderShiftCard(shift, finance = false) {
     <div class="shift-meta"><span>Valor do plantão</span><strong>${formatMoney(shift.valueCents)}</strong></div>
     <div class="shift-meta"><span>${finance ? "Recebido / pendente" : "Pagamento registrado"}</span><strong>${formatMoney(paid)}${finance ? ` / ${formatMoney(payable ? remainingCents(shift) : 0)}` : ""}</strong></div>
     <div class="card-actions">
+      ${!finance && shift.status === "scheduled" ? `<button class="small-button" data-action="complete" data-id="${id}"> Marcar como realizado</button>` : ""}  
       ${payable ? `<button class="small-button" data-action="payment" data-id="${id}">Registrar pagamento</button>` : ""}
-      <button class="small-button" data-action="edit" data-id="${id}">Editar</button>
+      <button class="small-button2" data-action="edit" data-id="${id}">Editar</button>
     </div>
   </article>`;
 }
@@ -98,6 +99,142 @@ function renderShiftList() {
   $("#shiftList").innerHTML = filtered.map(shift => renderShiftCard(shift)).join("");
   $("#emptyShifts").classList.toggle("visible", filtered.length === 0);
 }
+
+function renderPrintableCalendar(monthValue) {
+  const container = $("#printCalendar");
+
+  if (!monthValue) {
+    toast("Selecione uma data inicial para definir o mês do calendário.");
+    return false;
+  }
+
+  const [year, monthNumber] = monthValue.split("-").map(Number);
+
+  // Primeiro e último dia do mês selecionado.
+  const firstDay = new Date(year, monthNumber - 1, 1);
+  const lastDay = new Date(year, monthNumber, 0);
+
+  // O calendário começa na segunda-feira.
+  const mondayOffset = (firstDay.getDay() + 6) % 7;
+  const totalCells = Math.ceil((mondayOffset + lastDay.getDate()) / 7) * 7;
+
+  // Inclui somente plantões programados ou realizados.
+  // Cancelados não entram no calendário.
+  const monthShifts = sortShifts(
+    shifts.filter(shift =>
+      shift.date?.startsWith(monthValue) &&
+      (shift.status === "scheduled" || shift.status === "completed")
+    )
+  );
+
+  if (monthShifts.length === 0) {
+    toast("Não há plantões programados ou realizados neste mês.");
+    return false;
+  }
+
+  const shiftsByDate = new Map();
+
+  for (const shift of monthShifts) {
+    if (!shiftsByDate.has(shift.date)) {
+      shiftsByDate.set(shift.date, []);
+    }
+
+    shiftsByDate.get(shift.date).push(shift);
+  }
+
+  const monthTitle = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric"
+  }).format(firstDay);
+
+  const weekdays = [
+    "Segunda-feira",
+    "Terça-feira",
+    "Quarta-feira",
+    "Quinta-feira",
+    "Sexta-feira",
+    "Sábado",
+    "Domingo"
+  ];
+
+  const weekdayHeaders = weekdays
+    .map(day => `<div class="calendar-weekday">${day}</div>`)
+    .join("");
+
+  const cells = [];
+
+  for (let index = 0; index < totalCells; index++) {
+    const dayNumber = index - mondayOffset + 1;
+    const isCurrentMonth =
+      dayNumber >= 1 && dayNumber <= lastDay.getDate();
+
+    if (!isCurrentMonth) {
+      cells.push(`
+        <div class="calendar-day calendar-day-empty"></div>
+      `);
+      continue;
+    }
+
+    const date = [
+      year,
+      String(monthNumber).padStart(2, "0"),
+      String(dayNumber).padStart(2, "0")
+    ].join("-");
+
+    const dayShifts = shiftsByDate.get(date) || [];
+
+    const shiftItems = dayShifts.map(shift => {
+      const start = getShiftStart(shift);
+      const end = getShiftEnd(shift);
+
+      const startTime = escapeHtml(formatTime(start));
+      const endTime = escapeHtml(formatTime(end));
+      const name = escapeHtml(shift.name || "Plantão");
+
+      // Observações podem ajudar a identificar o local ou contexto.
+      const notes = shift.notes
+        ? `<small class="calendar-shift-notes">${escapeHtml(shift.notes)}</small>`
+        : "";
+
+      return `
+        <div class="calendar-shift">
+          <strong>${startTime}–${endTime}</strong>
+          <span>${name}</span>
+          ${notes}
+        </div>
+      `;
+    }).join("");
+
+    cells.push(`
+      <div class="calendar-day">
+        <span class="calendar-day-number">${dayNumber}</span>
+        <div class="calendar-day-shifts">
+          ${shiftItems || ""}
+        </div>
+      </div>
+    `);
+  }
+
+  container.innerHTML = `
+    <header class="calendar-print-header">
+      <h1>Plantão Fácil</h1>
+      <h2>Calendário de ${escapeHtml(monthTitle)}</h2>
+    </header>
+
+    <div class="calendar-grid">
+      ${weekdayHeaders}
+      ${cells.join("")}
+    </div>
+
+    <footer class="calendar-print-footer">
+      Calendário mensal de plantões · Plantão Fácil
+    </footer>
+  `;
+
+  return true;
+}
+
+
 function financeData() {
   const monthValue = $("#financeMonth").value || toLocalMonthInput(new Date());
   const byPayment = $("#financeRef").value === "payment";
@@ -243,14 +380,65 @@ function openShiftDialog(shift = null) {
   $("#shiftDialog").showModal();
 }
 $("#newShiftBtn").addEventListener("click", () => openShiftDialog());
-document.addEventListener("click", event => {
+document.addEventListener("click", async event => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
+
   const shift = shifts.find(item => item.id === button.dataset.id);
   if (!shift) return;
-  if (button.dataset.action === "edit") openShiftDialog(shift);
-  if (button.dataset.action === "payment") openPaymentDialog(shift);
+
+  if (button.dataset.action === "edit") {
+    openShiftDialog(shift);
+    return;
+  }
+
+  if (button.dataset.action === "payment") {
+    openPaymentDialog(shift);
+    return;
+  }
+
+  if (button.dataset.action !== "complete") return;
+
+  // Só permite marcar plantões programados.
+  if (shift.status !== "scheduled") return;
+
+  // Atualiza a data atual antes de verificar se o plantão é futuro.
+  today = toLocalDateInput(new Date());
+
+  // Plantões futuros exigem confirmação.
+  if (shift.date > today) {
+    const confirmed = confirm(
+      "Este plantão está programado para uma data futura. " +
+      "Tem certeza de que deseja marcá-lo como realizado?"
+    );
+
+    if (!confirmed) return;
+  }
+
+  button.disabled = true;
+
+  try {
+    const completedShift = {
+      ...shift,
+      status: "completed",
+      updatedAt: new Date().toISOString()
+    };
+
+    await putShift(db, completedShift);
+    await refreshData();
+
+    toast("Plantão marcado como realizado.");
+  } catch (error) {
+    button.disabled = false;
+
+    toast(
+      error.message ||
+      "Não foi possível marcar o plantão como realizado."
+    );
+  }
 });
+
+
 $("#shiftStatus").addEventListener("change", () => $("#cancelPayWrap").classList.toggle("hidden", $("#shiftStatus").value !== "cancelled"));
 $("#closeShiftDialog").addEventListener("click", () => $("#shiftDialog").close());
 $("#cancelShiftEdit").addEventListener("click", () => $("#shiftDialog").close());
@@ -348,6 +536,31 @@ $("#financeSearch").addEventListener("input", renderFinance);
 $("#shiftDate").addEventListener("change", () => { if (!payTouched) $("#shiftPayDate").value = expectedPaymentDate(loadRule(), $("#shiftDate").value) || ""; });
 $("#shiftPayDate").addEventListener("input", () => { payTouched = true; });
 $("#statusFilter").addEventListener("change", renderShiftList);
+$("#printCalendarBtn").addEventListener("click", () => {
+  const startDate = $("#listStart").value;
+
+  if (!startDate) {
+    toast("Preencha a data inicial do filtro De.");
+    return;
+  }
+
+  const monthValue = startDate.slice(0, 7);
+
+  if (!renderPrintableCalendar(monthValue)) {
+    return;
+  }
+
+  document.body.classList.add("print-calendar-mode");
+
+  const cleanup = () => {
+    document.body.classList.remove("print-calendar-mode");
+    window.removeEventListener("afterprint", cleanup);
+  };
+
+  window.addEventListener("afterprint", cleanup);
+
+  window.print();
+});
 $("#financeMonth").addEventListener("change", renderFinance);
 
 $("#exportBackup").addEventListener("click", () => {
@@ -390,16 +603,60 @@ $("#importBackup").addEventListener("change", async event => {
   finally { event.target.value = ""; }
 });
 
-// ---- Tema ----
+
+// ---- Tema com Efeito de Círculo Expandindo ----
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#0f1a15" : "#14251f";
+  const metaColor = document.querySelector('meta[name="theme-color"]');
+  if (metaColor) {
+    metaColor.content = theme === "dark" ? "#0f1a15" : "#14251f";
+  }
 }
-applyTheme(document.documentElement.dataset.theme || "light");
-$("#themeBtn").addEventListener("click", () => {
-  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  applyTheme(next);
-  try { localStorage.setItem("pf-theme", next); } catch {}
+
+// Inicializa o tema salvo ou padrão
+const savedTheme = document.documentElement.dataset.theme || localStorage.getItem("pf-theme") || "light";
+applyTheme(savedTheme);
+
+$("#themeBtn").addEventListener("click", event => {
+  const currentTheme = document.documentElement.dataset.theme || "light";
+  const nextTheme = currentTheme === "dark" ? "light" : "dark";
+
+  if (!document.startViewTransition) {
+    applyTheme(nextTheme);
+    try { localStorage.setItem("pf-theme", nextTheme); } catch {}
+    return;
+  }
+
+  const button = event.target.closest('button') || event.target;
+  const rect = button.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+
+  const endRadius = Math.hypot(
+    Math.max(x, window.innerWidth - x),
+    Math.max(y, window.innerHeight - y)
+  );
+
+  // Inicia a transição
+  const transition = document.startViewTransition(() => {
+    applyTheme(nextTheme);
+    try { localStorage.setItem("pf-theme", nextTheme); } catch {}
+  });
+
+  transition.ready.then(() => {
+    // Força o navegador a renderizar o frame zero do círculo sem atraso de tick
+    document.documentElement.animate(
+      [
+        { clipPath: `circle(0px at ${x}px ${y}px)` },
+        { clipPath: `circle(${endRadius}px at ${x}px ${y}px)` }
+      ],
+      {
+        duration: 450,
+        easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+        pseudoElement: '::view-transition-new(root)'
+      }
+    );
+  });
 });
 
 // ---- Forma de pagamento ----
@@ -439,9 +696,29 @@ $("#ruleType").addEventListener("change", syncRuleFields);
 $("#exportIcs").addEventListener("click", () => {
   const list = shifts.filter(shift => isActive(shift) && shiftInDateRange(shift, $("#listStart").value, $("#listEnd").value) && matchesQuery(shift, $("#searchShifts").value));
   if (!list.length) return toast("Nenhum plantão no filtro atual para exportar.");
-  download(`escala-${$("#listStart").value || "completa"}.ics`, buildIcs(list), "text/calendar");
-  toast(`${list.length} plantão(ões) exportado(s) para o calendário.`);
+  
+  // Gera o conteúdo do arquivo ICS
+  const icsContent = buildIcs(list);
+  
+  // Cria um link virtual em formato Data URI para forçar a abertura imediata
+  const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement("a");
+  link.href = url;
+  // Definir um atributo target ou deixar como link direto aciona o manipulador de protocolo do SO
+  link.setAttribute("download", `escala-${$("#listStart").value || "completa"}.ics`);
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  // Limpa o objeto da memória após o clique
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  
+  toast(`${list.length} plantão(ões) enviados para o calendário.`);
 });
+
 $("#exportCsv").addEventListener("click", () => {
   const { monthValue, rows } = financeData();
   if (!rows.length) return toast("Nada para exportar neste mês.");
@@ -452,6 +729,7 @@ $("#exportCsv").addEventListener("click", () => {
   download(`financeiro-${monthValue}.csv`, buildCsv(header, lines), "text/csv;charset=utf-8");
   toast("CSV exportado.");
 });
+
 $("#exportPdf").addEventListener("click", () => {
   const { monthValue, rows, payments, totals } = financeData();
   if (!rows.length && !payments.length) return toast("Nada para o relatório neste mês.");
@@ -493,3 +771,62 @@ async function init() {
   }
 }
 init();
+
+// ---- Configuração de PWA e Botão de Instalação ----
+let deferredPrompt;
+const installBtn = $("#installBtn");
+
+// 1. Registra o Service Worker
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch(err => {
+      console.error("Erro ao registrar Service Worker:", err);
+    });
+  });
+}
+
+// 2. Intercepta o evento nativo de instalação
+window.addEventListener("beforeinstallprompt", event => {
+  // Impede que o navegador exiba o banner padrão imediatamente
+  event.preventDefault();
+  deferredPrompt = event;
+
+  // Mostra o botão de instalação
+  if (installBtn) {
+    installBtn.classList.remove("hidden");
+  }
+});
+
+// 3. Ação ao clicar no botão de instalação
+if (installBtn) {
+  installBtn.addEventListener("click", async () => {
+    if (!deferredPrompt) {
+      toast("O navegador ainda não está pronto para instalar. Tente abrir via Servidor Local (Live Server).");
+      return;
+    }
+
+    // Exibe o prompt nativo do sistema
+    deferredPrompt.prompt();
+
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === "accepted") {
+      toast("Aplicativo instalado com sucesso!");
+    }
+
+    // Limpa a referência e esconde o botão
+    deferredPrompt = null;
+    installBtn.classList.add("hidden");
+  });
+}
+
+// Oculta o botão se o app já estiver instalado
+window.addEventListener("appinstalled", () => {
+  deferredPrompt = null;
+  if (installBtn) installBtn.classList.add("hidden");
+  toast("Plantão Fácil instalado!");
+});
+
+// [DICA DE TESTE] Se quiser forçar o botão a aparecer no PC para testar o clique, 
+// remova temporariamente o comentário da linha abaixo:
+// window.addEventListener("DOMContentLoaded", () => { if(installBtn) installBtn.classList.remove("hidden"); });

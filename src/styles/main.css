@@ -13,20 +13,35 @@
   --field: #fbfcfa; --soft: #e7eee7; --tint: #eaf3e7; --hl: #edf5df; --hl-line: #dbe9c6;
   --danger-bg: #fff0ee; --danger-line: #f2d2ce; --ok-text: #27683d; --accent: #164b34; --toast: #192720;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --btngrd:#164b34;
 }
 :root[data-theme="dark"] {
   color-scheme: dark; --ink: #e6efe9; --muted: #97a69d; --paper: #0f1713; --surface: #17211c; --line: #27352d;
   --green: #2f8a60; --red: #e07a75; --field: #111b16; --soft: #202d26; --tint: #1d3328; --hl: #1f3321; --hl-line: #2d4a30;
   --danger-bg: #3a1f1e; --danger-line: #5a2f2c; --ok-text: #8fd1a9; --accent: #8fd1a9; --toast: #2b3d34;
   --shadow: 0 14px 35px rgba(0, 0, 0, .35);
+   --btngrd:#e1e7df;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--paper); color: var(--ink); }
+/* Transição suave de cores padrão para elementos gerais */
+body {
+  margin: 0; 
+  background: var(--paper); 
+  color: var(--ink);
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* Prepara o navegador para o efeito de expansão circular (View Transitions API) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
 button, input, select, textarea { font: inherit; }
 button, .button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #a9d46b; outline-offset: 2px; }
 .app-shell { max-width: 1240px; margin: 0 auto; padding: 0 28px; }
-.topbar { height: 86px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.topbar { height: 86px; display: flex; align-items: center; justify-content: space-between; }
 .brand { display: flex; gap: 12px; align-items: center; color: inherit; text-decoration: none; }
 .brand-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; background: var(--green-dark); color: var(--lime); font-weight: 900; letter-spacing: -1px; }
 .brand strong, .brand small { display: block; }
@@ -67,7 +82,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--green); }
 .weekday-picker { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 9px; }
 .weekday-picker label, .duration-picker label { position: relative; }
 .weekday-picker input, .duration-picker input { position: absolute; opacity: 0; pointer-events: none; }
-.weekday-picker span { display: grid; place-items: center; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: var(--field); cursor: pointer; transition: .15s; }
+.weekday-picker span { display: grid; place-items: center; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: var(--field); cursor: pointer; transition: .20s; }
 .weekday-picker input:checked + span { background: var(--green-dark); border-color: var(--accent); color: white; }
 .duration-picker { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
 .duration-picker span { display: grid; place-items: center; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); cursor: pointer; color: var(--muted); }
@@ -77,7 +92,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--green); }
 .field-help, .muted { color: var(--muted); font-size: 12px; line-height: 1.55; }
 .field-help { margin: 10px 0 0; }
 .form-actions, .modal-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
-.button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 11px; padding: 11px 16px; font-weight: 750; font-size: 12px; text-decoration: none; transition: .15s; }
+.button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 11px; padding: 11px 16px; font-weight: 750; font-size: 12px; text-decoration: none; transition: .20; }
 .button-primary { color: white; background: var(--green); }
 .button-primary:hover { background: var(--green-dark); }
 .button-secondary { color: var(--ink); background: var(--soft); border-color: var(--line); }
@@ -104,7 +119,8 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
 .status.completed { background: var(--tint); color: var(--ok-text); }
 .status.cancelled { background: var(--danger-bg); color: var(--red); }
 .card-actions { display: flex; gap: 7px; flex-wrap: wrap; justify-content: end; }
-.small-button { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--accent); font-size: 11px; font-weight: 750; padding: 8px 10px; }
+.small-button { border: 1px solid var(--line); border-radius: 8px; background: var(--ok-text); color: var(--line); font-size: 11px; font-weight: 750; padding: 8px 10px; }
+.small-button2{ border: 1px solid var(--line); border-radius: 8px; background: var(--line); color: var(--accent); font-size: 11px; font-weight: 750; padding: 8px 10px; }
 .empty-state { display: none; text-align: center; background: var(--surface); border: 1px dashed var(--line); border-radius: 18px; padding: 40px 20px; }
 .empty-state.visible { display: block; }
 .empty-state > span { display: inline-grid; place-items: center; width: 48px; height: 48px; background: var(--tint); color: var(--green); border-radius: 15px; font-size: 26px; }
@@ -130,7 +146,7 @@ footer { border-top: 1px solid var(--line); padding: 22px 0 30px; display: flex;
 .spacer { flex: 1; }
 .payment-history { margin-top: 14px; }
 .payment-item { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
-.toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--toast); color: #fff; border-radius: 12px; padding: 13px 17px; font-size: 13px; box-shadow: var(--shadow); transition: .2s; max-width: calc(100% - 28px); z-index: 10; }
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--toast); color: #fff; border-radius: 12px; padding: 13px 17px; font-size: 13px; box-shadow: var(--shadow); transition: .20s; max-width: calc(100% - 28px); z-index: 10; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (max-width: 900px) {
   .summary-grid, .finance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -176,4 +192,188 @@ footer { border-top: 1px solid var(--line); padding: 22px 0 30px; display: flex;
   #printReport, #printReport * { color: #000 !important; }
   #printReport table { min-width: 0; font-size: 11px; }
   #printReport h1 { font-size: 20px; }
+}
+
+/* =========================================
+   CALENDÁRIO MENSAL PARA IMPRESSÃO
+   ========================================= */
+
+#printCalendar {
+  display: none;
+}
+
+.calendar-print-actions {
+  justify-content: flex-start;
+}
+
+.calendar-print-header {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.calendar-print-header h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.calendar-print-header h2 {
+  font-size: 16px;
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid #999;
+  border-left: 1px solid #999;
+}
+
+.calendar-weekday {
+  padding: 8px 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: #eeeeee;
+  border-right: 1px solid #999;
+  border-bottom: 1px solid #999;
+}
+
+.calendar-day {
+  min-width: 0;
+  min-height: 100px;
+  padding: 5px;
+  border-right: 1px solid #999;
+  border-bottom: 1px solid #999;
+  overflow-wrap: anywhere;
+}
+
+.calendar-day-empty {
+  background: #f7f7f7;
+}
+
+.calendar-day-number {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.calendar-day-shifts {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.calendar-shift {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-left: 3px solid #555;
+  background: #f0f0f0;
+  font-size: 10px;
+  line-height: 1.3;
+  break-inside: avoid;
+}
+
+.calendar-shift strong {
+  font-size: 10px;
+}
+
+.calendar-shift-notes {
+  font-size: 9px;
+  color: #444;
+}
+
+.calendar-print-footer {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 9px;
+  color: #555;
+}
+
+/* Isola o calendário durante a impressão. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+
+
+  body.print-calendar-mode * {
+    visibility: hidden !important;
+  }
+
+  body.print-calendar-mode #printCalendar,
+  body.print-calendar-mode #printCalendar * {
+    visibility: visible !important;
+  }
+
+  body.print-calendar-mode #printCalendar {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    color: #111;
+    background: #fff;
+    font-family: Arial, sans-serif;
+  }
+
+  body.print-calendar-mode .calendar-print-header {
+    margin-bottom: 8px;
+  }
+
+  body.print-calendar-mode .calendar-grid {
+    grid-template-rows: 8mm repeat(6, minmax(0, 1fr));
+    height: 155mm;
+  }
+
+  body.print-calendar-mode .calendar-day {
+    min-height: 0;
+    padding: 3px;
+  }
+
+  body.print-calendar-mode .calendar-weekday {
+    padding: 4px 2px;
+    font-size: 10px;
+  }
+
+  body.print-calendar-mode .calendar-day-number {
+    margin-bottom: 3px;
+    font-size: 11px;
+  }
+
+  body.print-calendar-mode .calendar-shift {
+    padding: 2px;
+    gap: 1px;
+    font-size: 9px;
+  }
+
+  body.print-calendar-mode .calendar-shift strong {
+    font-size: 9px;
+  }
+
+  body.print-calendar-mode .calendar-shift-notes {
+    font-size: 8px;
+  }
+
+  body.print-calendar-mode .calendar-print-footer {
+    margin-top: 4px;
+    font-size: 8px;
+  }
+
+  body.print-calendar-mode .calendar-day,
+  body.print-calendar-mode .calendar-shift {
+    break-inside: avoid;
+  }
+
+  body.print-calendar-mode #printCalendar {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
 }

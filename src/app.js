@@ -773,4 +773,13 @@ $("#exportPdf").addEventListener("click", () => {
   window.print();
 });
 
+async function init() {
+  try {
+    db = await openDatabase();
+    navigator.storage?.persist?.();
+    await refreshData();
+  } catch (error) { toast(error.message || "Não foi possível iniciar o app."); }
+}
+init();
+
 

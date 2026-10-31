@@ -5,6 +5,28 @@ import { toCents, formatMoney, sum } from "./core/money.js";
 import { expectedPaymentDate } from "./core/payment-rules.js";
 import { buildIcs, buildCsv, csvMoney, download } from "./core/exports.js";
 
+
+const $ = selector => document.querySelector(selector);
+const $$ = selector => [...document.querySelectorAll(selector)];
+const APP_VERSION = "0.2.0";
+let db;
+let shifts = [];
+let generationPreview = [];
+let previewConflicts = [];
+let scheduleMode = "weekly";
+let toastTimer;
+
+let today = toLocalDateInput(new Date());
+const month = toLocalMonthInput(new Date());
+$("#periodStart").value = today;
+$("#periodEnd").value = `${month}-${String(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
+$("#cycleStartDate").value = today;
+$("#listStart").value = `${month}-01`;
+$("#listEnd").value = $("#periodEnd").value;
+$("#financeMonth").value = month;
+$("#paymentDate").value = today;
+$("#appVersion").textContent = `v${APP_VERSION}`;
+
 // 1. Registra o Service Worker
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -37,26 +59,7 @@ window.addEventListener("appinstalled", () => {
 });
 
 
-const $ = selector => document.querySelector(selector);
-const $$ = selector => [...document.querySelectorAll(selector)];
-const APP_VERSION = "0.2.0";
-let db;
-let shifts = [];
-let generationPreview = [];
-let previewConflicts = [];
-let scheduleMode = "weekly";
-let toastTimer;
 
-let today = toLocalDateInput(new Date());
-const month = toLocalMonthInput(new Date());
-$("#periodStart").value = today;
-$("#periodEnd").value = `${month}-${String(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
-$("#cycleStartDate").value = today;
-$("#listStart").value = `${month}-01`;
-$("#listEnd").value = $("#periodEnd").value;
-$("#financeMonth").value = month;
-$("#paymentDate").value = today;
-$("#appVersion").textContent = `v${APP_VERSION}`;
 
 function toast(message) {
   const el = $("#toast");
